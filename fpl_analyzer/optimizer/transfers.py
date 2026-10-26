@@ -12,10 +12,9 @@ from fpl_analyzer.data.squad import TeamSquad
 from fpl_analyzer.optimizer.candidates import ScoredPlayer
 from fpl_analyzer.optimizer.starting_xi import Lineup, select_starting_xi
 
-# Back-compat aliases
+# Back-compat aliases (avoid calling RULES.squad_counts at import time)
 HIT_POINTS = RULES.hit_points
 MAX_PER_CLUB = RULES.max_per_club
-SQUAD_COUNTS = RULES.squad_counts
 DEFAULT_OUT_CANDIDATES = RULES.transfer_out_candidates
 DEFAULT_IN_PER_POS = RULES.transfer_in_per_pos
 

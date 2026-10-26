@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fpl_analyzer.data.players import Position
-
 
 @dataclass(frozen=True, slots=True)
 class SeasonRules:
@@ -17,7 +15,7 @@ class SeasonRules:
     hit_points: int = 4
     max_free_transfers_bank: int = 2
     free_transfers_per_gw: int = 1
-    # Squad composition
+    # Squad composition (element_type ids: 1 GKP, 2 DEF, 3 MID, 4 FWD)
     squad_gkp: int = 2
     squad_def: int = 5
     squad_mid: int = 5
@@ -42,7 +40,10 @@ class SeasonRules:
     strategy_horizon: int = 5
 
     @property
-    def squad_counts(self) -> dict[Position, int]:
+    def squad_counts(self) -> dict:
+        """Map Position enum → count (import Position lazily to avoid cycles)."""
+        from fpl_analyzer.data.players import Position
+
         return {
             Position.GKP: self.squad_gkp,
             Position.DEF: self.squad_def,

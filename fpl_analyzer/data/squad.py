@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fpl_analyzer.api.fpl_api import FplApi, FplApiError
-from fpl_analyzer.config import RULES
 from fpl_analyzer.data.players import Player, Position, parse_players
 from fpl_analyzer.data.teams import Team, parse_teams
 
@@ -154,6 +153,8 @@ def _purchase_prices(
 
 
 def estimate_free_transfers(history: dict[str, Any]) -> tuple[int | None, str]:
+    from fpl_analyzer.config import RULES
+
     current_rows = history.get("current") or []
     if not current_rows:
         return None, "No history yet"

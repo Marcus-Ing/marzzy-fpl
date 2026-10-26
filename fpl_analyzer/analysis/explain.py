@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from fpl_analyzer.optimizer.candidates import ScoredPlayer
-from fpl_analyzer.optimizer.transfers import TransferMove, TransferPlan
+if TYPE_CHECKING:
+    from fpl_analyzer.optimizer.candidates import ScoredPlayer
+    from fpl_analyzer.optimizer.transfers import TransferMove, TransferPlan
 
 
 @dataclass(frozen=True, slots=True)
