@@ -1,20 +1,15 @@
-"""Pick a legal starting XI + bench order from a 15-man scored squad."""
+"""Pick a legal starting XI + bench order — maximise projected horizon xPts."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
 
+from fpl_analyzer.config import RULES
 from fpl_analyzer.data.players import Position
 from fpl_analyzer.optimizer.candidates import ScoredPlayer
 
-VALID_FORMATIONS: tuple[tuple[int, int, int], ...] = tuple(
-    (d, m, f)
-    for d in range(3, 6)
-    for m in range(2, 6)
-    for f in range(1, 4)
-    if d + m + f == 10
-)
+VALID_FORMATIONS: tuple[tuple[int, int, int], ...] = RULES.valid_formations()
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,8 +19,8 @@ class Lineup:
     bench: tuple[ScoredPlayer, ...]
     captain: ScoredPlayer
     vice: ScoredPlayer
-    xi_score: float
-    xi_xpts: float
+    xi_score: float  # desirability sum (compat)
+    xi_xpts: float  # Σ horizon xPts for XI (objective core)
 
     @property
     def formation_label(self) -> str:
@@ -43,22 +38,27 @@ def _by_pos(squad: list[ScoredPlayer]) -> dict[Position, list[ScoredPlayer]]:
     for p in squad:
         groups[p.position].append(p)
     for pos in groups:
-        groups[pos].sort(key=lambda s: s.score, reverse=True)
+        # Prefer projected points, then desirability
+        groups[pos].sort(
+            key=lambda s: (s.xpts_horizon, s.score), reverse=True
+        )
     return groups
 
 
 def _pick_captain_vice(
     xi: list[ScoredPlayer], *, min_availability: float = 0.5
 ) -> tuple[ScoredPlayer, ScoredPlayer]:
-    ranked = sorted(xi, key=lambda s: s.score, reverse=True)
+    ranked = sorted(
+        xi, key=lambda s: (s.xpts_horizon, s.score), reverse=True
+    )
     eligible = [s for s in ranked if s.form.availability >= min_availability]
     pool = eligible if len(eligible) >= 2 else ranked
     return pool[0], pool[1] if len(pool) > 1 else pool[0]
 
 
 def select_starting_xi(squad: list[ScoredPlayer]) -> Lineup:
-    if len(squad) != 15:
-        raise ValueError(f"Expected 15 players, got {len(squad)}")
+    if len(squad) != RULES.squad_size:
+        raise ValueError(f"Expected {RULES.squad_size} players, got {len(squad)}")
     groups = _by_pos(squad)
     if len(groups[Position.GKP]) < 1:
         raise ValueError("Need at least one goalkeeper")
@@ -89,7 +89,7 @@ def select_starting_xi(squad: list[ScoredPlayer]) -> Lineup:
                 for p in squad
                 if p.element_id not in xi_ids and p.position != Position.GKP
             ),
-            key=lambda s: s.score,
+            key=lambda s: (s.xpts_horizon, s.score),
             reverse=True,
         )
         captain, vice = _pick_captain_vice(xi)
@@ -100,9 +100,9 @@ def select_starting_xi(squad: list[ScoredPlayer]) -> Lineup:
             captain=captain,
             vice=vice,
             xi_score=sum(p.score for p in xi),
-            xi_xpts=sum(p.xpts for p in xi),
+            xi_xpts=sum(p.xpts_horizon for p in xi),
         )
-        if best is None or lineup.xi_score > best.xi_score:
+        if best is None or lineup.xi_xpts > best.xi_xpts:
             best = lineup
 
     if best is None:
@@ -130,11 +130,7 @@ def _exhaustive_xi(squad: list[ScoredPlayer]) -> Lineup:
                         xi = [gkp, *defs, *mids, *fwds]
                         xi_ids = {p.element_id for p in xi}
                         bench_gk = next(
-                            (
-                                p
-                                for p in keepers
-                                if p.element_id not in xi_ids
-                            ),
+                            (p for p in keepers if p.element_id not in xi_ids),
                             None,
                         )
                         if bench_gk is None:
@@ -146,7 +142,7 @@ def _exhaustive_xi(squad: list[ScoredPlayer]) -> Lineup:
                                 if p.element_id not in xi_ids
                                 and p.position != Position.GKP
                             ),
-                            key=lambda s: s.score,
+                            key=lambda s: s.xpts_horizon,
                             reverse=True,
                         )
                         captain, vice = _pick_captain_vice(xi)
@@ -157,9 +153,9 @@ def _exhaustive_xi(squad: list[ScoredPlayer]) -> Lineup:
                             captain=captain,
                             vice=vice,
                             xi_score=sum(p.score for p in xi),
-                            xi_xpts=sum(p.xpts for p in xi),
+                            xi_xpts=sum(p.xpts_horizon for p in xi),
                         )
-                        if best is None or lineup.xi_score > best.xi_score:
+                        if best is None or lineup.xi_xpts > best.xi_xpts:
                             best = lineup
     if best is None:
         raise ValueError("No legal starting XI for this squad")

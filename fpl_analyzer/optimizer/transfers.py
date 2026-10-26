@@ -1,4 +1,4 @@
-"""Constrained 0–2 transfer search using Phase 2 scores."""
+"""Constrained 0–2 transfer search. Objective: Σ XI horizon xPts − hit cost."""
 
 from __future__ import annotations
 
@@ -6,21 +6,18 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import Iterable
 
+from fpl_analyzer.config import RULES
 from fpl_analyzer.data.players import Position
 from fpl_analyzer.data.squad import TeamSquad
 from fpl_analyzer.optimizer.candidates import ScoredPlayer
 from fpl_analyzer.optimizer.starting_xi import Lineup, select_starting_xi
 
-HIT_POINTS = 4
-MAX_PER_CLUB = 3
-SQUAD_COUNTS = {
-    Position.GKP: 2,
-    Position.DEF: 5,
-    Position.MID: 5,
-    Position.FWD: 3,
-}
-DEFAULT_OUT_CANDIDATES = 8
-DEFAULT_IN_PER_POS = 25
+# Back-compat aliases
+HIT_POINTS = RULES.hit_points
+MAX_PER_CLUB = RULES.max_per_club
+SQUAD_COUNTS = RULES.squad_counts
+DEFAULT_OUT_CANDIDATES = RULES.transfer_out_candidates
+DEFAULT_IN_PER_POS = RULES.transfer_in_per_pos
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,10 +44,11 @@ class TransferPlan:
     hit_cost: int
     bank_after: int
     lineup: Lineup
-    objective: float
-    gain_vs_roll: float
+    objective: float  # XI xPts − hits
+    gain_vs_roll: float  # objective delta
     xpts_gain_vs_roll: float
     notes: str = ""
+    desirability_gain: float = 0.0
 
     @property
     def n_transfers(self) -> int:
@@ -87,13 +85,15 @@ def _club_ok(ids: Iterable[int], pool: dict[int, ScoredPlayer]) -> bool:
     for eid in ids:
         tid = pool[eid].team_id
         counts[tid] = counts.get(tid, 0) + 1
-        if counts[tid] > MAX_PER_CLUB:
+        if counts[tid] > RULES.max_per_club:
             return False
     return True
 
 
 def _out_candidates(owned: list[ScoredPlayer], limit: int) -> list[ScoredPlayer]:
-    return sorted(owned, key=lambda p: (p.form.availability, p.score))[:limit]
+    return sorted(
+        owned, key=lambda p: (p.form.availability, p.xpts_horizon, p.score)
+    )[:limit]
 
 
 def _in_candidates(
@@ -110,13 +110,12 @@ def _in_candidates(
         and p.element_id not in owned_ids
         and p.form.status != "u"
     ]
-    market.sort(key=lambda p: p.score, reverse=True)
+    market.sort(key=lambda p: (p.xpts_horizon, p.score), reverse=True)
     return market[:limit]
 
 
 def _hits(n_transfers: int, free_transfers: int) -> tuple[int, int]:
-    hits = max(0, n_transfers - max(0, free_transfers))
-    return hits, hits * HIT_POINTS
+    return RULES.hit_cost(n_transfers, free_transfers)
 
 
 def _evaluate_squad(
@@ -126,13 +125,14 @@ def _evaluate_squad(
     bank_after: int,
     moves: tuple[TransferMove, ...],
     free_transfers: int,
-    roll_xi_score: float,
+    roll_objective: float,
     roll_xi_xpts: float,
+    roll_xi_score: float,
 ) -> TransferPlan | None:
     if bank_after < 0 or not _club_ok(squad_ids, pool):
         return None
     scored_squad = [pool[i] for i in squad_ids]
-    for pos, need in SQUAD_COUNTS.items():
+    for pos, need in RULES.squad_counts.items():
         if sum(1 for p in scored_squad if p.position == pos) != need:
             return None
     try:
@@ -140,7 +140,7 @@ def _evaluate_squad(
     except ValueError:
         return None
     hits, hit_cost = _hits(len(moves), free_transfers)
-    objective = lineup.xi_score - hit_cost
+    objective = lineup.xi_xpts - hit_cost
     return TransferPlan(
         moves=moves,
         free_transfers=free_transfers,
@@ -149,8 +149,9 @@ def _evaluate_squad(
         bank_after=bank_after,
         lineup=lineup,
         objective=objective,
-        gain_vs_roll=objective - roll_xi_score,
+        gain_vs_roll=objective - roll_objective,
         xpts_gain_vs_roll=(lineup.xi_xpts - roll_xi_xpts) - hit_cost,
+        desirability_gain=(lineup.xi_score - roll_xi_score),
     )
 
 
@@ -178,6 +179,7 @@ def search_transfers(
     bank = squad.bank
 
     roll_lineup = select_starting_xi(owned)
+    roll_objective = roll_lineup.xi_xpts
     roll = TransferPlan(
         moves=(),
         free_transfers=fts,
@@ -185,10 +187,11 @@ def search_transfers(
         hit_cost=0,
         bank_after=bank,
         lineup=roll_lineup,
-        objective=roll_lineup.xi_score,
+        objective=roll_objective,
         gain_vs_roll=0.0,
         xpts_gain_vs_roll=0.0,
-        notes="Keep squad; optimise XI only.",
+        notes="Roll FT — keep squad, optimise XI only.",
+        desirability_gain=0.0,
     )
 
     outs = _out_candidates(owned, out_limit)
@@ -209,7 +212,8 @@ def search_transfers(
                 if in_p.now_cost > budget:
                     continue
                 if (
-                    in_p.score <= out_p.score
+                    in_p.xpts_horizon <= out_p.xpts_horizon
+                    and in_p.score <= out_p.score
                     and in_p.form.availability <= out_p.form.availability
                 ):
                     continue
@@ -223,8 +227,9 @@ def search_transfers(
                     bank_after=budget - in_p.now_cost,
                     moves=(move,),
                     free_transfers=fts,
-                    roll_xi_score=roll.objective,
+                    roll_objective=roll_objective,
                     roll_xi_xpts=roll.lineup.xi_xpts,
+                    roll_xi_score=roll.lineup.xi_score,
                 )
                 if plan is None:
                     continue
@@ -256,7 +261,10 @@ def search_transfers(
                     buy_total = in_a.now_cost + in_b.now_cost
                     if buy_total > budget:
                         continue
-                    if in_a.score + in_b.score <= out_a.score + out_b.score:
+                    if (
+                        in_a.xpts_horizon + in_b.xpts_horizon
+                        <= out_a.xpts_horizon + out_b.xpts_horizon
+                    ):
                         continue
                     new_ids = [
                         i
@@ -273,8 +281,9 @@ def search_transfers(
                         bank_after=budget - buy_total,
                         moves=moves,
                         free_transfers=fts,
-                        roll_xi_score=roll.objective,
+                        roll_objective=roll_objective,
                         roll_xi_xpts=roll.lineup.xi_xpts,
+                        roll_xi_score=roll.lineup.xi_score,
                     )
                     if plan is None:
                         continue
@@ -284,16 +293,17 @@ def search_transfers(
 
     plans.sort(key=lambda p: p.objective, reverse=True)
     recommendation = plans[0]
-    if recommendation.gain_vs_roll < 0.05:
+    if recommendation.gain_vs_roll < 0.15:
         recommendation = roll
-        notes.append("No transfer beats rolling — keep your free transfer.")
+        notes.append("No transfer beats rolling on Σ xPts − hits; recommend roll.")
     elif recommendation.is_roll:
-        notes.append("Best plan is to roll.")
+        notes.append("Best plan is roll FT.")
     else:
         notes.append(
-            f"Recommend {recommendation.n_transfers} transfer(s) "
-            f"(+{recommendation.gain_vs_roll:.1f} vs roll)."
+            f"Recommend {recommendation.n_transfers} transfer(s): "
+            f"ΔxPts {recommendation.xpts_gain_vs_roll:+.1f} after hits."
         )
+    notes.append("Objective = Σ XI horizon xPts − 4×hits (not desirability alone).")
 
     return TransferSearchResult(
         free_transfers=fts,

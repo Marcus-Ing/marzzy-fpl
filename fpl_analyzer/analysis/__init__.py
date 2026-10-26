@@ -11,9 +11,10 @@ from fpl_analyzer.analysis.scoring import PlayerAnalysis, SCORE_WEIGHTS, analyze
 from fpl_analyzer.api.fpl_api import FplApi
 from fpl_analyzer.data.fixtures import parse_fixtures
 from fpl_analyzer.data.players import parse_players
+from fpl_analyzer.config import RULES
 from fpl_analyzer.data.squad import TeamSquad, load_team_squad
 
-DEFAULT_FIXTURE_HORIZON = 3
+DEFAULT_FIXTURE_HORIZON = RULES.default_fixture_horizon
 
 
 @dataclass(slots=True)

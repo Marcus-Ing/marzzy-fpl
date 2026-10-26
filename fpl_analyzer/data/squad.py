@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fpl_analyzer.api.fpl_api import FplApi, FplApiError
+from fpl_analyzer.config import RULES
 from fpl_analyzer.data.players import Player, Position, parse_players
 from fpl_analyzer.data.teams import Team, parse_teams
 
@@ -158,16 +159,22 @@ def estimate_free_transfers(history: dict[str, Any]) -> tuple[int | None, str]:
         return None, "No history yet"
 
     freehit_events, wildcard_events = _chip_events(history)
-    fts = 1
+    fts = RULES.free_transfers_per_gw
     for row in current_rows:
         event = int(row["event"])
         made = int(row.get("event_transfers") or 0)
         if event in freehit_events or event in wildcard_events:
-            fts = 1
+            fts = RULES.free_transfers_per_gw
             continue
         remaining = max(0, fts - made)
-        fts = min(2, remaining + 1)
-    return fts, "Estimated from public history (max bank 2)"
+        fts = min(
+            RULES.max_free_transfers_bank,
+            remaining + RULES.free_transfers_per_gw,
+        )
+    return (
+        fts,
+        f"Estimated from public history (max bank {RULES.max_free_transfers_bank})",
+    )
 
 
 def load_team_squad(team_id: int, api: FplApi | None = None) -> TeamSquad:
