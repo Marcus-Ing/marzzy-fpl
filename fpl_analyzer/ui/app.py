@@ -1,4 +1,4 @@
-"""FPL Helper — visual XI, multi-GW xPts, Why?, strategies & chips."""
+"""FPL Helper — compact header, top tabs, one focused view each."""
 
 from __future__ import annotations
 
@@ -26,28 +26,37 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      .block-container { padding-top: 1.2rem; max-width: 1180px; }
-      div[data-testid="stMetricValue"] { font-size: 1.25rem; }
+      .block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 1120px; }
+      div[data-testid="stMetricValue"] { font-size: 1.15rem; }
+      div[data-testid="stMetricLabel"] { font-size: 0.8rem; }
+      /* Make tabs more obvious */
+      button[data-baseweb="tab"] {
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        padding: 0.55rem 1rem !important;
+      }
+      div[data-testid="stTabs"] { margin-top: 0.35rem; margin-bottom: 0.5rem; }
       .pitch {
         background: linear-gradient(180deg, #1b5e20 0%, #2e7d32 55%, #1b5e20 100%);
-        border-radius: 16px; padding: 18px 12px 22px; color: #fff;
-        border: 2px solid rgba(255,255,255,0.25);
+        border-radius: 14px; padding: 14px 10px 16px; color: #fff;
+        border: 1px solid rgba(255,255,255,0.22);
       }
       .pitch-row {
-        display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
-        margin: 10px 0;
+        display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;
+        margin: 8px 0;
       }
       .shirt {
-        background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.35);
-        border-radius: 12px; min-width: 88px; max-width: 110px; padding: 8px 6px;
-        text-align: center; backdrop-filter: blur(2px);
+        background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 10px; min-width: 82px; max-width: 100px; padding: 7px 5px;
+        text-align: center;
       }
-      .shirt .name { font-weight: 700; font-size: 0.85rem; line-height: 1.2; }
-      .shirt .meta { font-size: 0.72rem; opacity: 0.9; margin-top: 2px; }
-      .shirt .xpts { font-size: 0.95rem; font-weight: 700; margin-top: 4px; }
+      .shirt .name { font-weight: 700; font-size: 0.8rem; line-height: 1.15; }
+      .shirt .meta { font-size: 0.68rem; opacity: 0.9; margin-top: 2px; }
+      .shirt .xpts { font-size: 0.88rem; font-weight: 700; margin-top: 3px; }
       .shirt.cap { box-shadow: 0 0 0 2px #ffd54f; }
       .badge { display:inline-block; background:#ffd54f; color:#111;
-               font-size:0.65rem; font-weight:800; padding:1px 5px; border-radius:6px; }
+               font-size:0.62rem; font-weight:800; padding:1px 5px; border-radius:6px; }
+      .move-line { font-size: 1.02rem; margin: 0.25rem 0 0.5rem; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -94,9 +103,8 @@ def _shirt_html(p, *, captain=False, vice=False) -> str:
     return (
         f'<div class="{cls}">{badge}'
         f'<div class="name">{p.web_name}</div>'
-        f'<div class="meta">{p.club_short} · {p.position.short_name}</div>'
-        f'<div class="xpts">{p.xpts_horizon:.1f} xPts</div>'
-        f'<div class="meta">P(start) {p.p_start:.0%}</div>'
+        f'<div class="meta">{p.club_short}</div>'
+        f'<div class="xpts">{p.xpts_horizon:.1f}</div>'
         f"</div>"
     )
 
@@ -124,9 +132,10 @@ def render_pitch(lineup) -> None:
         rows_html.append(f'<div class="pitch-row">{cells}</div>')
     st.markdown(
         f'<div class="pitch">'
-        f'<div style="text-align:center;opacity:.9;font-size:.85rem;margin-bottom:6px">'
-        f"Suggested XI · {lineup.formation_label} · "
-        f"Σ {lineup.xi_xpts:.1f} horizon xPts</div>"
+        f'<div style="text-align:center;opacity:.85;font-size:.8rem;margin-bottom:4px">'
+        f"{lineup.formation_label} · Σ {lineup.xi_xpts:.1f} xPts · "
+        f"C {lineup.captain.web_name} / VC {lineup.vice.web_name}"
+        f"</div>"
         + "".join(rows_html)
         + "</div>",
         unsafe_allow_html=True,
@@ -135,7 +144,6 @@ def render_pitch(lineup) -> None:
 
 def main() -> None:
     st.title("FPL Helper")
-    st.caption("Projected points, clear transfers, and a suggested starting XI.")
 
     with st.sidebar:
         st.header("Your team")
@@ -176,24 +184,20 @@ def main() -> None:
             disabled=parsed_id is None,
         )
         if parsed_id is None and team_id_raw.strip():
-            st.caption("Enter a valid numeric Team ID to continue.")
-        st.caption(
-            "Official FPL API data. Free transfers estimated from public history. "
-            "Projections are rules-based — not ML."
-        )
+            st.caption("Enter a valid numeric Team ID.")
+        st.caption("Data from the official FPL API.")
 
     if not load and "result" not in st.session_state:
         st.info(
-            "Enter your **Team ID** in the sidebar, then click **Load team**. "
-            "Use the help tip if you’re not sure where to find it."
+            "Enter your **Team ID** in the sidebar, then click **Load team**."
         )
         st.stop()
 
     if load:
         if parsed_id is None:
-            st.warning("Please enter a valid numeric Team ID first.")
+            st.warning("Enter a valid numeric Team ID first.")
             st.stop()
-        with st.spinner("Loading squad and building recommendations…"):
+        with st.spinner("Loading…"):
             try:
                 st.session_state["result"] = _load(
                     parsed_id, int(horizon), int(max_transfers)
@@ -202,10 +206,7 @@ def main() -> None:
                 st.error(str(exc))
                 st.stop()
             except Exception:
-                st.error(
-                    "Something went wrong loading that team. "
-                    "Check the Team ID and try again."
-                )
+                st.error("Could not load that team. Check the Team ID and try again.")
                 st.stop()
 
     result: OptimizationResult = st.session_state["result"]
@@ -215,69 +216,25 @@ def main() -> None:
     rec = search.recommendation
     lu = rec.lineup
 
-    # --- Header metrics ---
+    # --- Compact header only (no wall of content) ---
     st.subheader(squad.team_name)
-    st.write(f"Manager · {squad.manager_name}")
-    for note in analysis.notes[:2]:
-        st.caption(note)
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Target GW", f"GW{analysis.target_event}")
-    c2.metric("Bank", _money(squad.bank))
-    c3.metric("Squad value", _money(squad.team_value))
-    c4.metric(
+    st.caption(
+        f"{squad.manager_name} · GW{analysis.target_event}"
+        + (f" · {analysis.notes[0]}" if analysis.notes else "")
+    )
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("Bank", _money(squad.bank))
+    h2.metric(
         "Free transfers",
         "—" if squad.free_transfers is None else str(squad.free_transfers),
     )
-    c5.metric("Horizon xPts (XI)", f"{lu.xi_xpts:.1f}")
+    h3.metric("Squad value", _money(squad.team_value))
+    h4.metric("XI xPts", f"{lu.xi_xpts:.1f}")
 
-    # --- First screen: pitch + move ---
-    st.markdown("### Your gameweek XI")
-    render_pitch(lu)
-    st.caption(
-        f"Captain **{lu.captain.web_name}** · Vice **{lu.vice.web_name}** · "
-        "Shirt totals are projected xPts over the fixture look-ahead."
-    )
-
-    st.markdown("### Recommended move")
-    if rec.is_roll:
-        st.success("**Hold your free transfer** — no move beats standing still on Σ xPts − hits.")
-    else:
-        st.success(
-            f"**Make {rec.n_transfers} transfer"
-            f"{'s' if rec.n_transfers != 1 else ''}**"
-        )
-        for move in rec.moves:
-            st.markdown(
-                f"- **Sell** {move.player_out.web_name} "
-                f"({move.player_out.club_short}) "
-                f"→ **Buy** {move.player_in.web_name} "
-                f"({move.player_in.club_short})  \n"
-                f"  Sell {_money(move.sell_price)} · Buy {_money(move.buy_price)}"
-            )
-        if rec.hits:
-            st.warning(
-                f"Includes a **{rec.hits}-hit (−{rec.hit_cost} pts)**. "
-                "Only take it if the projected gain sticks."
-            )
-        else:
-            st.info("No hit — within your free transfers.")
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("ΔxPts vs hold", f"{rec.xpts_gain_vs_roll:+.1f}")
-    m2.metric("Objective (xPts−hits)", f"{rec.objective:.1f}")
-    m3.metric("Bank after", _money(rec.bank_after))
-
-    if result.why:
-        with st.expander("Why this recommendation?", expanded=True):
-            for b in result.why.bullets:
-                st.markdown(f"- {b}")
-            st.markdown("**Risks**")
-            for r in result.why.risks:
-                st.markdown(f"- {r}")
-
-    tab_rec, tab_xpts, tab_squad, tab_alts, tab_chips = st.tabs(
+    # --- Tabs at top of main content ---
+    tab_overview, tab_plans, tab_xpts, tab_squad, tab_alts, tab_chips = st.tabs(
         [
+            "Overview",
             "Plans & strategy",
             "xPts table",
             "Squad",
@@ -286,48 +243,79 @@ def main() -> None:
         ]
     )
 
-    with tab_rec:
-        st.markdown("### Compare plans")
+    with tab_overview:
+        left, right = st.columns((1.35, 1), gap="large")
+        with left:
+            render_pitch(lu)
+        with right:
+            st.markdown("#### Recommended move")
+            if rec.is_roll:
+                st.markdown(
+                    '<p class="move-line"><strong>Hold</strong> your free transfer.</p>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<p class="move-line"><strong>'
+                    f"{rec.n_transfers} transfer"
+                    f"{'s' if rec.n_transfers != 1 else ''}"
+                    f"</strong>"
+                    f"{' · hit −' + str(rec.hit_cost) if rec.hits else ' · no hit'}"
+                    f"</p>",
+                    unsafe_allow_html=True,
+                )
+                for move in rec.moves:
+                    st.markdown(
+                        f"- {move.player_out.web_name} → "
+                        f"**{move.player_in.web_name}** "
+                        f"({_money(move.sell_price)} → {_money(move.buy_price)})"
+                    )
+            a, b = st.columns(2)
+            a.metric("ΔxPts vs hold", f"{rec.xpts_gain_vs_roll:+.1f}")
+            b.metric("Bank after", _money(rec.bank_after))
+
+            if result.why:
+                with st.expander("Why?", expanded=False):
+                    for bullet in result.why.bullets:
+                        st.markdown(f"- {bullet}")
+                    st.markdown("**Risks**")
+                    for risk in result.why.risks:
+                        st.markdown(f"- {risk}")
+
+    with tab_plans:
+        st.markdown("##### Hold vs 1 vs 2 transfers")
         cols = st.columns(3)
         for col, label, plan in (
             (cols[0], "Hold", search.roll),
-            (cols[1], "Best single transfer", search.best_one),
-            (cols[2], "Best two transfers", search.best_two),
+            (cols[1], "Best 1 transfer", search.best_one),
+            (cols[2], "Best 2 transfers", search.best_two),
         ):
             with col:
                 st.markdown(f"**{label}**")
                 if plan is None:
-                    st.write("No option found")
+                    st.caption("None")
                     continue
                 st.write(_plan_title(plan))
                 st.caption(
-                    f"Hits: {plan.hits} · "
-                    f"ΔxPts: {plan.xpts_gain_vs_roll:+.1f} · "
-                    f"Obj: {plan.objective:.1f}"
+                    f"Hits {plan.hits} · ΔxPts {plan.xpts_gain_vs_roll:+.1f}"
                 )
 
         if result.strategy:
             st.markdown(
-                f"### Multi-GW strategy (~{result.strategy.horizon} GW look)"
+                f"##### Across ~{result.strategy.horizon} gameweeks"
             )
-            st.info(
+            st.markdown(
                 f"**Preferred:** {result.strategy.preferred.title} "
-                f"(~{result.strategy.preferred.horizon_gain:+.1f} xPts)"
+                f"({result.strategy.preferred.horizon_gain:+.1f})"
             )
             for opt in result.strategy.options:
                 st.markdown(
-                    f"- **{opt.title}** — {opt.detail} "
-                    f"(gain {opt.horizon_gain:+.1f})"
+                    f"- **{opt.title}** — gain {opt.horizon_gain:+.1f}"
                 )
 
     with tab_xpts:
-        st.markdown("### Projected xPts by player (horizon)")
-        st.caption(
-            "Separate from transfer desirability. Built from P(start), xG/xA, "
-            "CS proxies, DefCon, and opponent strength — rules-based V1."
-        )
-        rows = []
         scored_map = {p.element_id: p for p in result.owned_scored}
+        rows = []
         for sp in squad.players:
             p = scored_map.get(sp.element_id)
             if not p:
@@ -338,88 +326,64 @@ def main() -> None:
                     "Pos": p.position.short_name,
                     "Club": p.club_short,
                     "P(start)": round(p.p_start, 2),
-                    "xMins": round(p.xmins, 0),
-                    "xPts (horizon)": round(p.xpts_horizon, 1),
-                    "Desirability": round(p.score, 1),
+                    "xPts": round(p.xpts_horizon, 1),
                     "Risk": f"{p.risk:.0%}",
-                    "Fixtures": p.fixtures.summary,
                 }
             )
-        rows.sort(key=lambda r: r["xPts (horizon)"], reverse=True)
+        rows.sort(key=lambda r: r["xPts"], reverse=True)
         st.dataframe(rows, use_container_width=True, hide_index=True)
-
-        # Detail for top player
-        if result.owned_scored:
-            top = max(result.owned_scored, key=lambda p: p.xpts_horizon)
-            st.markdown(f"#### Fixture breakdown — {top.web_name}")
-            st.dataframe(
-                top.horizon_xpts.as_table(),
-                use_container_width=True,
-                hide_index=True,
-            )
+        with st.expander("Fixture breakdown (top player)"):
+            if result.owned_scored:
+                top = max(result.owned_scored, key=lambda p: p.xpts_horizon)
+                st.caption(top.web_name)
+                st.dataframe(
+                    top.horizon_xpts.as_table(),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
     with tab_squad:
-        st.markdown("### Current squad")
         scored_map = {p.element_id: p for p in result.owned_scored}
         rows = []
         for p in squad.players:
             s = scored_map.get(p.element_id)
-            flag = "C" if p.is_captain else ("VC" if p.is_vice_captain else "")
             rows.append(
                 {
                     "#": p.squad_slot,
                     "Pos": p.position.short_name,
                     "Club": p.club_short,
                     "Player": p.web_name,
-                    "Role": "XI" if p.is_starter else "Bench",
-                    "C/VC": flag,
-                    "Buy": _money(p.purchase_price),
+                    "Role": "XI" if p.is_starter else "BN",
                     "Sell": _money(p.selling_price),
-                    "Now": _money(p.now_cost),
-                    "P(start)": round(s.p_start, 2) if s else None,
                     "xPts": round(s.xpts_horizon, 1) if s else None,
-                    "Status": (
-                        s.form.status.upper()
-                        if s and s.form.status != "a"
-                        else ""
-                    ),
                 }
             )
         st.dataframe(rows, use_container_width=True, hide_index=True)
-        st.markdown("### Bench order (suggested)")
-        for i, p in enumerate(lu.bench, start=1):
-            st.write(
-                f"{i}. {p.position.short_name} {p.club_short} **{p.web_name}** "
-                f"— {p.xpts_horizon:.1f} xPts"
-            )
+        with st.expander("Suggested bench order"):
+            for i, p in enumerate(lu.bench, start=1):
+                st.write(
+                    f"{i}. {p.web_name} ({p.club_short}) — {p.xpts_horizon:.1f}"
+                )
 
     with tab_alts:
-        st.markdown("### Other strong plans")
-        alt_rows = []
-        for i, plan in enumerate(search.top_plans[:6], start=1):
-            alt_rows.append(
-                {
-                    "#": i,
-                    "Plan": _plan_title(plan),
-                    "Hits": plan.hits,
-                    "ΔxPts": round(plan.xpts_gain_vs_roll, 1),
-                    "Objective": round(plan.objective, 1),
-                    "Bank after": _money(plan.bank_after),
-                }
-            )
+        alt_rows = [
+            {
+                "#": i,
+                "Plan": _plan_title(plan),
+                "Hits": plan.hits,
+                "ΔxPts": round(plan.xpts_gain_vs_roll, 1),
+            }
+            for i, plan in enumerate(search.top_plans[:6], start=1)
+        ]
         st.dataframe(alt_rows, use_container_width=True, hide_index=True)
 
     with tab_chips:
-        st.markdown("### Chip suggestions (simple V1)")
-        st.caption(
-            "Uses horizon xPts heuristics — not a full fixture-blank solver yet."
-        )
         if not result.chips:
             st.write("No chip advice available.")
         for chip in result.chips:
-            icon = "✅" if chip.worth_considering else "⏳"
+            mark = "Worth a look" if chip.worth_considering else "Probably wait"
             st.markdown(
-                f"{icon} **{chip.label}** — est. gain ~{chip.estimated_gain:.1f}  \n"
+                f"**{chip.label}** — {mark} (~{chip.estimated_gain:.1f})  \n"
                 f"{chip.rationale}"
             )
 
