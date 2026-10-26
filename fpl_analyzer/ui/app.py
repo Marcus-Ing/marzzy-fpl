@@ -15,8 +15,6 @@ if str(_ROOT) not in sys.path:
 from fpl_analyzer.api.fpl_api import FplApiError  # noqa: E402
 from fpl_analyzer.optimizer import OptimizationResult, optimize_team  # noqa: E402
 
-DEFAULT_TEAM_ID = 9520161
-
 st.set_page_config(
     page_title="FPL Helper",
     page_icon="⚽",
@@ -56,19 +54,42 @@ def _plan_title(plan) -> str:
     )
 
 
+def _parse_team_id(raw: str) -> int | None:
+    """Return a positive int Team ID, or None if the field is empty/invalid."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if not text.isdigit():
+        return None
+    value = int(text)
+    return value if value > 0 else None
+
+
 def main() -> None:
     st.title("FPL Helper")
     st.caption("Squad insights, transfer ideas, and a suggested starting XI.")
 
     with st.sidebar:
         st.header("Your team")
-        team_id = st.number_input(
+        team_id_raw = st.text_input(
             "FPL Team ID",
-            min_value=1,
-            value=DEFAULT_TEAM_ID,
-            step=1,
-            help="Find this in your FPL squad URL: …/entry/<id>/",
+            value="",
+            placeholder="Enter team ID",
+            help=(
+                "The number in your FPL team URL: "
+                "fantasy.premierleague.com/entry/<Team ID>/"
+            ),
         )
+        with st.expander("How do I find my Team ID?"):
+            st.markdown(
+                """
+1. Go to [fantasy.premierleague.com](https://fantasy.premierleague.com) and sign in  
+2. Open **Points** (or your squad / team page)  
+3. Look at the browser URL — it looks like:  
+   `https://fantasy.premierleague.com/entry/1234567/`  
+4. The number after `/entry/` is your **Team ID** (example: `1234567`)
+                """.strip()
+            )
         horizon = st.slider(
             "Fixture look-ahead (gameweeks)",
             min_value=1,
@@ -80,23 +101,37 @@ def main() -> None:
             options=[0, 1, 2],
             value=2,
         )
-        load = st.button("Load team", type="primary", use_container_width=True)
+        parsed_id = _parse_team_id(team_id_raw)
+        load = st.button(
+            "Load team",
+            type="primary",
+            use_container_width=True,
+            disabled=parsed_id is None,
+        )
+        if parsed_id is None and team_id_raw.strip():
+            st.caption("Enter a valid numeric Team ID to continue.")
         st.caption(
             "Data comes from the official Fantasy Premier League API. "
             "Free transfers are estimated from public history."
         )
 
     if not load and "result" not in st.session_state:
-        st.info("Enter your Team ID and click **Load team** to get started.")
+        st.info(
+            "Enter your **Team ID** in the sidebar, then click **Load team** "
+            "to get started. Use the help tip if you’re not sure where to find it."
+        )
         st.stop()
 
     if load:
+        if parsed_id is None:
+            st.warning("Please enter a valid numeric Team ID first.")
+            st.stop()
         with st.spinner("Loading squad and building recommendations…"):
             try:
                 st.session_state["result"] = _load(
-                    int(team_id), int(horizon), int(max_transfers)
+                    parsed_id, int(horizon), int(max_transfers)
                 )
-                st.session_state["team_id"] = int(team_id)
+                st.session_state["team_id"] = parsed_id
             except FplApiError as exc:
                 st.error(str(exc))
                 st.stop()

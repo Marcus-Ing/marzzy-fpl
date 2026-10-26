@@ -12,7 +12,7 @@ streamlit run fpl_analyzer/ui/app.py
 Optional CLI:
 
 ```bash
-python3 -m fpl_analyzer.main 9520161
+python3 -m fpl_analyzer.main <team_id>
 ```
 
 Your Team ID is the number in  
